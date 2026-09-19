@@ -114,7 +114,7 @@ public class DemoService {
         try(PreparedStatement ps=c.prepareStatement("SELECT tick,victim_steamid FROM kills WHERE match_id=? AND tick BETWEEN ? AND ? ORDER BY tick,id")){ps.setLong(1,matchId);ps.setLong(2,matchStart);ps.setLong(3,roundEnds.get(roundEnds.size()-1).getKey());ResultSet rs=ps.executeQuery();while(rs.next())deaths.add(new Object[]{rs.getLong(1),rs.getString(2)});}
         int deathIndex=0;
         for(int roundIndex=0;roundIndex<roundEnds.size();roundIndex++){
-          long roundStart=roundIndex==0?matchStart:roundEnds.get(roundIndex-1).getKey()+1,roundEnd=roundEnds.get(roundIndex).getKey();boolean firstHalf=roundEnds.size()>12&&roundIndex<12;int playerSide=firstHalf?oppositeSide(playerTeam):playerTeam,winnerSide="T".equalsIgnoreCase(roundEnds.get(roundIndex).getValue())?2:3;
+          long roundStart=roundIndex==0?matchStart:roundEnds.get(roundIndex-1).getKey()+1,roundEnd=roundEnds.get(roundIndex).getKey();int roundNumber=roundIndex+1;boolean differsFromFinal=sidesDifferFromFinal(roundNumber,roundEnds.size());int playerSide=differsFromFinal?oppositeSide(playerTeam):playerTeam,winnerSide="T".equalsIgnoreCase(roundEnds.get(roundIndex).getValue())?2:3;
           boolean roundWon=playerSide==winnerSide;if(playerSide==3){ctRounds++;if(roundWon)ctWins++;}else if(playerSide==2){tRounds++;if(roundWon)tWins++;}
           Map<Integer,LinkedHashSet<String>> alive=new LinkedHashMap<>();for(var roster:rosters.entrySet())alive.put(roster.getKey(),new LinkedHashSet<>(roster.getValue()));Integer clutchX=null;
           while(deathIndex<deaths.size()&&((Number)deaths.get(deathIndex)[0]).longValue()<roundStart)deathIndex++;
@@ -253,7 +253,7 @@ public class DemoService {
       Map<Integer,LinkedHashSet<String>> alive=new LinkedHashMap<>();for(var entry:rosters.entrySet())alive.put(entry.getKey(),new LinkedHashSet<>(entry.getValue()));Map<String,Integer> candidates=new HashMap<>();
       try(PreparedStatement ps=c.prepareStatement("SELECT attacker_steamid,victim_steamid FROM kills WHERE match_id=? AND tick BETWEEN ? AND ? ORDER BY tick,id")){ps.setLong(1,id);ps.setLong(2,roundStart);ps.setLong(3,roundEnd);ResultSet rs=ps.executeQuery();while(rs.next()){String victim=rs.getString(2);Integer victimTeam=playerTeam.get(victim);if(victimTeam==null)continue;alive.get(victimTeam).remove(victim);for(var entry:alive.entrySet()){if(entry.getValue().size()!=1)continue;int opponents=alive.entrySet().stream().filter(x->!x.getKey().equals(entry.getKey())).mapToInt(x->x.getValue().size()).sum();if(opponents>0)candidates.putIfAbsent(entry.getValue().iterator().next(),opponents);}}}
       Integer winner=null;
-      try(PreparedStatement ps=c.prepareStatement("SELECT event_name,player_steamid,JSON_UNQUOTE(JSON_EXTRACT(data_json,'$.winner')) FROM events WHERE match_id=? AND tick BETWEEN ? AND ? AND event_name IN ('bomb_defused','bomb_exploded','round_end') ORDER BY tick DESC")){ps.setLong(1,id);ps.setLong(2,roundStart);ps.setLong(3,roundEnd);ResultSet rs=ps.executeQuery();while(rs.next()){String event=rs.getString(1),sid=rs.getString(2);if((event.equals("bomb_defused")||event.equals("bomb_exploded"))&&playerTeam.containsKey(sid)){winner=playerTeam.get(sid);break;}if(event.equals("round_end")&&winner==null){try{String value=rs.getString(3);int side="T".equalsIgnoreCase(value)?2:"CT".equalsIgnoreCase(value)?3:Integer.parseInt(value);boolean swapped=starts.size()>12&&roundIndex<12;winner=swapped?rosters.keySet().stream().filter(t->t!=side).findFirst().orElse(null):side;}catch(Exception ignored){}}}}
+      try(PreparedStatement ps=c.prepareStatement("SELECT event_name,player_steamid,JSON_UNQUOTE(JSON_EXTRACT(data_json,'$.winner')) FROM events WHERE match_id=? AND tick BETWEEN ? AND ? AND event_name IN ('bomb_defused','bomb_exploded','round_end') ORDER BY tick DESC")){ps.setLong(1,id);ps.setLong(2,roundStart);ps.setLong(3,roundEnd);ResultSet rs=ps.executeQuery();while(rs.next()){String event=rs.getString(1),sid=rs.getString(2);if((event.equals("bomb_defused")||event.equals("bomb_exploded"))&&playerTeam.containsKey(sid)){winner=playerTeam.get(sid);break;}if(event.equals("round_end")&&winner==null){try{String value=rs.getString(3);int side="T".equalsIgnoreCase(value)?2:"CT".equalsIgnoreCase(value)?3:Integer.parseInt(value);boolean swapped=sidesDifferFromFinal(roundIndex+1,ends.size());winner=swapped?rosters.keySet().stream().filter(t->t!=side).findFirst().orElse(null):side;}catch(Exception ignored){}}}}
       if(winner==null){List<Integer> living=alive.entrySet().stream().filter(x->!x.getValue().isEmpty()).map(Map.Entry::getKey).toList();if(living.size()==1)winner=living.get(0);}
       if(winner==null)continue;for(var candidate:candidates.entrySet()){String sid=candidate.getKey();if(Objects.equals(playerTeam.get(sid),winner)&&alive.get(winner).contains(sid)){Map<String,Object> clutch=new LinkedHashMap<>();clutch.put("round",roundIndex+1);clutch.put("player",names.get(sid));clutch.put("steamid",sid);clutch.put("x",candidate.getValue());result.add(clutch);}}
     }
@@ -264,6 +264,8 @@ public class DemoService {
   private int scalarInt(Connection c,String sql,long id,long start,long end)throws SQLException{try(PreparedStatement ps=c.prepareStatement(sql)){ps.setLong(1,id);ps.setLong(2,start);ps.setLong(3,end);ResultSet rs=ps.executeQuery();return rs.next()?rs.getInt(1):0;}}
   private Long nullableLong(ResultSet rs,String col)throws SQLException{long v=rs.getLong(col);return rs.wasNull()?null:v;}
   private long firstNonZero(Long... values){for(Long v:values)if(v!=null&&v>0)return v;return 0;}
+  /** 常规赛第 12 回合后换边；12:12 后的加时从第 27 回合起每三回合换边。 */
+  private boolean sidesDifferFromFinal(int roundNumber,int totalRounds){int swaps=roundNumber<=12&&totalRounds>12?1:0;for(int boundary=27;boundary<totalRounds;boundary+=3)if(roundNumber<=boundary)swaps++;return swaps%2==1;}
   private double num(Object v){return v instanceof Number n?n.doubleValue():0;}
   /**
    * 自定义 WE 是绝对贡献分：4×ADR/100 + 3×KPR + APR + 2×本队回合胜率。
@@ -278,7 +280,7 @@ public class DemoService {
     Map<Integer,Integer> teamWins=new HashMap<>();
     for(int index=0;index<roundWinners.size();index++){
       int side="T".equalsIgnoreCase(roundWinners.get(index))?2:3;
-      int winner=roundWinners.size()>12&&index<12?(side==2?3:2):side;
+      int winner=sidesDifferFromFinal(index+1,roundWinners.size())?oppositeSide(side):side;
       teamWins.merge(winner,1,Integer::sum);
     }
     Map<String,Double> scores=new HashMap<>();

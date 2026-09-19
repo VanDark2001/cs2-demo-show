@@ -79,7 +79,8 @@ HTTP 请求
 - 队伍唯一分组依据是 `match_players.team_number`。
 - 统计优先从 `official_start_tick` 开始，并排除热身与赛后退出事件。
 - ADR 只计算敌方有效生命伤害；同一回合、同一受害者累计最多贡献 100 点。
-- CT/T 胜率按玩家在每个正式回合实际所在阵营计算。
+- CT/T 胜率按玩家在每个正式回合实际所在阵营计算；支持常规赛换边和 MR3 加时每
+  3 回合换边。
 - 残局尝试是玩家进入 1vX 的正式回合；本人存活且所在队获胜才计成功。
 - 高光是同一正式回合至少 3 杀，与残局独立计算。
 - Rating 和 WE 是项目自定义近似指标，并非 HLTV 官方数据。
@@ -185,6 +186,7 @@ MYSQL_PASSWORD=为csdemo应用账号设置的密码
 │  └─ STATISTICS_RULES.md            正式统计口径
 ├─ db_schema.py                      MySQL 初始化与共享表结构
 ├─ init_mysql.py                     首次启动初始化入口
+├─ match_scoring.py                  常规赛/加时换边和比分修复
 ├─ demoparser2_mysql.py              Demo 解析器
 ├─ steam_avatar_scraper.py           头像缓存
 ├─ start-demo-show.bat               Windows 一键启动
@@ -204,7 +206,7 @@ npm run build
 
 cd ..
 .\.venv312\Scripts\python.exe -m py_compile `
-  demoparser2_mysql.py steam_avatar_scraper.py db_schema.py init_mysql.py
+  demoparser2_mysql.py steam_avatar_scraper.py db_schema.py init_mysql.py match_scoring.py
 ```
 
 ## 常见问题

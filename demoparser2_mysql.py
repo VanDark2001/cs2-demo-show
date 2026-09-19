@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from demoparser2 import DemoParser
 from db_schema import open_application_database
+from match_scoring import score_round_winners
 from steam_avatar_scraper import download_avatars
 
 demo=Path(sys.argv[1]); p=DemoParser(str(demo)); header=p.parse_header()
@@ -84,11 +85,7 @@ for name in ['player_death','player_hurt','bomb_planted','bomb_defused','bomb_ex
   if name=='player_death': c.execute('INSERT INTO kills(match_id,round_id,tick,attacker_steamid,attacker_name,victim_steamid,victim_name,weapon,headshot,data_json) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(mid,rid,tick,row.get('attacker_steamid'),row.get('attacker_name'),row.get('user_steamid'),row.get('user_name'),normalize_weapon(row.get('weapon')),bool(row.get('headshot',False)),raw))
   elif name=='player_hurt': c.execute('INSERT INTO damages(match_id,round_id,tick,attacker_steamid,attacker_name,victim_steamid,victim_name,health_damage,armor_damage,data_json) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(mid,rid,tick,row.get('attacker_steamid'),row.get('attacker_name'),row.get('user_steamid'),row.get('user_name'),row.get('dmg_health'),row.get('dmg_armor'),raw))
   elif name.startswith('bomb_'): c.execute('INSERT INTO bomb_events(match_id,round_id,tick,event_name,player_steamid,player_name,site,data_json) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)',(mid,rid,tick,name,row.get('user_steamid'),row.get('user_name'),row.get('site'),raw))
-team_scores={2:0,3:0}; last_round=max((number for number,_ in round_winners),default=0)
-for number,winner in round_winners:
- side=2 if winner=='T' else 3 if winner=='CT' else 0
- if side and number<=12<last_round: side=5-side
- if side: team_scores[side]+=1
+team_scores=score_round_winners([winner for _,winner in sorted(round_winners)])
 c.execute("UPDATE matches SET final_score_t=%s,final_score_ct=%s WHERE id=%s",(team_scores[2],team_scores[3],mid))
 con.commit(); print('OK MySQL match_id',mid,'map',header.get('map_name')); con.close()
 try:

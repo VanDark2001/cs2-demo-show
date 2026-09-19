@@ -9,6 +9,15 @@ permissions:
   contents: read
 
 jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m py_compile demoparser2_mysql.py steam_avatar_scraper.py db_schema.py init_mysql.py match_scoring.py
+
   backend:
     runs-on: ubuntu-latest
     defaults:

@@ -12,6 +12,7 @@ cs-demo-parser/
 ├─ demoparser2_mysql.py              当前 MySQL Demo 解析器
 ├─ db_schema.py                      共享 MySQL 建库、建表与升级逻辑
 ├─ init_mysql.py                     首次启动数据库初始化入口
+├─ match_scoring.py                  常规赛/加时换边、比分计算与历史修复
 ├─ steam_avatar_scraper.py           Steam 头像下载与缓存
 ├─ uploads/                          已上传 Demo（大文件，勿清理）
 ├─ avatars/                          SteamID 对应头像缓存

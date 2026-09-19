@@ -10,9 +10,10 @@ export const weaponName = weapon => weaponNames[weapon?.toLowerCase()] || weapon
 export const avatarUrl = steamid => `${API}/avatars/${steamid}`
 export const hideBrokenAvatar = event => { event.target.style.display = 'none' }
 export const scoreValues = score => (String(score || '').match(/\d+/g) || []).map(Number)
-// 当前赛制先到 13 分；只有达到胜场且为较高分的一侧显示胜方颜色。
+// 常规赛或加时均以最终较高分的一侧显示胜方颜色；平局保持中性色。
 export const scoreTone = (score, index) => {
   const values = scoreValues(score)
   if (values.length !== 2) return ''
-  return values[index] >= 13 && values[index] === Math.max(...values) ? 'score-win' : 'score-loss'
+  if (values[0] === values[1]) return ''
+  return values[index] === Math.max(...values) ? 'score-win' : 'score-loss'
 }

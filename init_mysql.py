@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
 
-from db_schema import bootstrap_mysql
+from db_schema import bootstrap_mysql, open_application_database
+from match_scoring import repair_match_scores
 
 
 def load_local_env():
@@ -19,8 +20,13 @@ def load_local_env():
 if __name__ == "__main__":
     load_local_env()
     config = bootstrap_mysql()
+    connection = open_application_database()
+    try:
+        repaired_scores = repair_match_scores(connection)
+    finally:
+        connection.close()
     print(
         "MySQL initialized: "
         f"{config['host']}:{config['port']}/{config['database']} "
-        f"(application user: {config['user']})"
+        f"(application user: {config['user']}, repaired scores: {repaired_scores})"
     )
