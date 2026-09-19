@@ -73,7 +73,7 @@ for name in ['round_prestart','round_freeze_end','round_officially_ended']:
   row=clean(row); tick=int(row.get('tick',0) or 0)
   if name in ('round_prestart','round_freeze_end'): c.execute('INSERT INTO rounds(match_id,tick,start_type,round_number,data_json) VALUES(%s,%s,%s,%s,%s)',(mid,tick,name,len(rounds)+1,json.dumps(row,ensure_ascii=False,allow_nan=False))); rounds.append(c.lastrowid)
   else: c.execute('INSERT INTO rounds(match_id,tick,start_type,round_number,data_json) VALUES(%s,%s,%s,%s,%s)',(mid,tick,name,len(rounds)+1,json.dumps(row,ensure_ascii=False,allow_nan=False))); rounds.append(c.lastrowid)
-round_winners=[]
+round_winners=[]; last_round_end_tick=0
 for name in ['player_death','player_hurt','bomb_planted','bomb_defused','bomb_exploded','bomb_beginplant','bomb_begindefuse','round_prestart','round_freeze_end','round_end','round_officially_ended','round_announce_match_start','cs_win_panel_match','player_connect_full','player_spawn']:
  try: z=p.parse_events([name]); rows=z[0][1].to_dict(orient='records') if z else []
  except Exception: continue
@@ -81,12 +81,22 @@ for name in ['player_death','player_hurt','bomb_planted','bomb_defused','bomb_ex
   row=clean(row); raw=json.dumps(row,ensure_ascii=False,default=str,allow_nan=False); tick=int(row.get('tick',0) or 0); rid=None
   if name=='round_end' and str(row.get('winner','')).upper() in ('T','CT'):
    round_winners.append((int(row.get('round',0) or 0),str(row.get('winner')).upper()))
+   last_round_end_tick=max(last_round_end_tick,tick)
   c.execute('INSERT INTO events(match_id,round_id,event_name,tick,player_steamid,player_name,is_warmup,data_json) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)',(mid,rid,name,tick,row.get('user_steamid'),row.get('user_name'),tick < official_tick,raw))
   if name=='player_death': c.execute('INSERT INTO kills(match_id,round_id,tick,attacker_steamid,attacker_name,victim_steamid,victim_name,weapon,headshot,data_json) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(mid,rid,tick,row.get('attacker_steamid'),row.get('attacker_name'),row.get('user_steamid'),row.get('user_name'),normalize_weapon(row.get('weapon')),bool(row.get('headshot',False)),raw))
   elif name=='player_hurt': c.execute('INSERT INTO damages(match_id,round_id,tick,attacker_steamid,attacker_name,victim_steamid,victim_name,health_damage,armor_damage,data_json) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',(mid,rid,tick,row.get('attacker_steamid'),row.get('attacker_name'),row.get('user_steamid'),row.get('user_name'),row.get('dmg_health'),row.get('dmg_armor'),raw))
   elif name.startswith('bomb_'): c.execute('INSERT INTO bomb_events(match_id,round_id,tick,event_name,player_steamid,player_name,site,data_json) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)',(mid,rid,tick,name,row.get('user_steamid'),row.get('user_name'),row.get('site'),raw))
 team_scores=score_round_winners([winner for _,winner in sorted(round_winners)])
 c.execute("UPDATE matches SET final_score_t=%s,final_score_ct=%s WHERE id=%s",(team_scores[2],team_scores[3],mid))
+if last_round_end_tick:
+ try:
+  damage_rows=p.parse_ticks(['damage_total'],ticks=[last_round_end_tick]).to_dict(orient='records')
+  for row in damage_rows:
+   sid=str(row.get('steamid')); total=row.get('damage_total')
+   if sid not in ('0','None','nan') and total is not None and not (isinstance(total,float) and math.isnan(total)):
+    c.execute('UPDATE match_players SET total_damage=%s WHERE match_id=%s AND steamid=%s',(max(0,int(total)),mid,sid))
+ except Exception as exc:
+  print('[stats] damage_total unavailable; ADR will use player_hurt fallback:',exc,file=sys.stderr)
 con.commit(); print('OK MySQL match_id',mid,'map',header.get('map_name')); con.close()
 try:
  print('Steam',download_avatars([str(row.get('steamid')) for row in player_rows]))

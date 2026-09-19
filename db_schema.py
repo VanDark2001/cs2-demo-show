@@ -89,11 +89,17 @@ def ensure_schema(connection):
             match_id BIGINT,
             steamid VARCHAR(32),
             team_number INT,
+            total_damage INT NULL,
             PRIMARY KEY(match_id,steamid),
             FOREIGN KEY(match_id) REFERENCES matches(id) ON DELETE CASCADE,
             FOREIGN KEY(steamid) REFERENCES players(steamid)
             )"""
         )
+        try:
+            cursor.execute("ALTER TABLE match_players ADD COLUMN total_damage INT NULL")
+        except pymysql.err.OperationalError as error:
+            if error.args[0] != 1060:
+                raise
         cursor.execute(
             """CREATE TABLE IF NOT EXISTS rounds(
             id BIGINT AUTO_INCREMENT PRIMARY KEY,
